@@ -1,119 +1,121 @@
 # Last Minute Lifesaver
 
-A feature-oriented prototype for an AI-powered productivity companion.
+Last Minute Lifesaver is an AI-powered productivity companion designed to help users stay ahead of deadlines with a mix of dashboard intelligence, task planning, and AI-assisted action. The current repository is a working prototype with a React/Vite frontend and a FastAPI backend, and it already includes the core app shell, task/dashboard APIs, and Google OAuth entry points.
 
-This repo is organized as a monorepo-style project with separate frontend and backend apps, shared utilities, documentation, scripts, and agent assets.
+## What the project includes
 
-## Repository Structure
+- A React + Vite frontend with screens for dashboard, tasks, calendar, AI command, focus, panic, analytics, and auth.
+- A FastAPI backend with SQLAlchemy, Pydantic, API routing, and agent orchestration.
+- AI-oriented workflows for screening tasks, triaging priorities, and preparing action suggestions.
+- Google OAuth integration entry points for sign-in and callback handling.
 
-- `frontend/` — Vite + React application for the user experience
-- `backend/` — FastAPI backend, database, AI orchestration, and service integrations
-- `shared/` — Shared contracts, types, or utilities for cross-cutting logic
-- `docs/` — Project documentation and architecture notes
-- `scripts/` — Automation scripts for local setup, linting, or deployment
-- `.agents/` — Agent-specific instructions, prompts, and workflow assets
+## Repository structure
 
-## What’s included
+```text
+.
+├── backend/
+│   ├── app/
+│   │   ├── agents/
+│   │   ├── api/
+│   │   ├── database/
+│   │   ├── features/
+│   │   ├── integrations/
+│   │   ├── models/
+│   │   ├── prompts/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   └── tools/
+│   ├── pyproject.toml
+│   └── README.md
+├── docs/
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── features/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── store/
+│   │   ├── styles/
+│   │   └── types/
+│   ├── package.json
+│   └── README.md
+├── scripts/
+├── shared/
+└── README.md
+```
 
-- `frontend/src/features/` — Feature-based frontend modules for screens like dashboard, tasks, calendar, AI chat, focus, panic, analytics, auth, and settings
-- `frontend/src/services/` — API client and service utilities
-- `frontend/src/store/` — Lightweight state management stores
-- `backend/app/api/` — FastAPI routes and API wiring
-- `backend/app/agents/` — Agent orchestration logic and sub-agents
-- `backend/app/services/` — Service adapters for integrations like Gmail, Calendar, Docs, Slides, Drive, Maps, and notifications
-- `backend/app/database/` — SQLAlchemy database configuration and session management
-- `backend/app/prompts/` — Prompt templates and prompt engineering assets
-- `backend/app/scheduler/` — Background job scheduling and cron-style workflows
+## Tech stack
 
-## Quick Start
+### Frontend
+- React
+- Vite
+- TypeScript
+- Tailwind CSS
+- MUI
+- Zustand
+- React Router
 
 ### Backend
+- Python 3.11+
+- FastAPI
+- SQLAlchemy
+- Pydantic
+- Uvicorn
+- SQLite for local development
 
-1. Open a terminal and change into the backend folder:
+## Getting started
+
+### 1. Backend
 
 ```powershell
 cd backend
-```
-
-2. Create and activate a virtual environment:
-
-```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-3. Install dependencies:
-
-```powershell
-pip install -e .
-```
-
-4. Start the backend:
-
-```powershell
+pip install -e ".[dev]"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-5. Verify the backend is running:
+The API should be available at http://127.0.0.1:8000 and the FastAPI docs at http://127.0.0.1:8000/docs.
 
-```powershell
-curl http://127.0.0.1:8000/health
-```
-
-### Frontend
-
-1. Open a second terminal and change into the frontend folder:
+### 2. Frontend
 
 ```powershell
 cd frontend
-```
-
-2. Install dependencies:
-
-```powershell
 npm install
-```
-
-3. Start the Vite dev server:
-
-```powershell
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-4. Open the app in the browser:
+Then open http://127.0.0.1:5173/.
 
-```text
-http://127.0.0.1:5173/
-```
+## Authentication flow
 
-### Notes
+The app now supports a Google OAuth sign-in flow:
 
-- The frontend is configured to proxy `/api` and `/health` requests to the backend during development.
-- Backend CORS is enabled for local frontend origins such as `http://localhost:3000` and `http://127.0.0.1:5173`.
-- Copy `.env.example` files as needed and provide credentials for real Google / Gemini / OAuth integrations later.
+1. The frontend calls the backend Google auth URL endpoint.
+2. The backend builds the Google consent URL and redirects the user there.
+3. Google redirects back to the callback endpoint.
+4. The callback route stores the returned auth data in browser storage and redirects the user back to the main home/dashboard experience.
 
-## Development Notes
+For local development, the frontend expects the backend to run on http://127.0.0.1:8000 and the Vite app to run on http://127.0.0.1:5173.
 
-- Keep frontend screens and logic grouped by feature under `frontend/src/features/`.
-- Keep backend service and integration code separate from agent orchestration.
-- Use `shared/` for common types or conventions that should be reused between frontend and backend.
+## Environment notes
 
-## Recommended Workflow
+- The backend environment file contains local defaults and the Google OAuth/Gemini placeholders.
+- The frontend environment file points the app at the local backend proxy target.
+- Fill in the required credentials before enabling real integrations.
 
-- Backend development: `python -m uvicorn app.main:app --reload`
-- Frontend development: `npm run dev`
-- Use `npm run build` in `frontend/` to verify production bundling
+## Development notes
 
-## Future direction
+- Keep feature-specific UI code under the frontend feature folders.
+- Keep API routes and backend wiring in the backend app modules.
+- Keep agent logic isolated in the backend agent package so it can evolve independently from the UI.
+- When testing auth locally, verify that the callback lands back in the app and that the browser stores the access token for subsequent API requests.
 
-This repo is structured to grow beyond a hackathon prototype into a more scalable architecture:
+## Hackathon status
 
-- Add backend feature modules for auth, tasks, calendar, AI, and settings
-- Move prompt templates into a dedicated `backend/app/prompts/` folder
-- Add service wrappers for Google APIs and other external integrations
-- Keep agent logic isolated in `backend/app/agents/`
-- Use `shared/` for shared contracts and cross-service type safety
+This repository is now at a strong prototype stage with a working local app shell, backend API, and Google sign-in flow. The main remaining work is polishing the demo experience, strengthening the agent behavior, and connecting more real-world integrations.
 
----
+### Recent updates
 
-If you want, I can also add a `CONTRIBUTING.md` and `docs/architecture.md` next. 
+- The frontend now restores the main dashboard experience when a saved auth session is detected.
+- The auth callback flow now persists the returned token and redirects users back into the app without dropping them on the login screen.

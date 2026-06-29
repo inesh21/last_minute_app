@@ -1337,8 +1337,13 @@ function AnalyticsScreen() {
 
 // ── Main App ──────────────────────────────────────────────────────────────
 
+function hasStoredSession() {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem("access_token"));
+}
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("login");
+  const [screen, setScreen] = useState<Screen>(() => (hasStoredSession() ? "dashboard" : "login"));
   const [dark, setDark] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState<BackendUser | null>(null);
@@ -1362,20 +1367,22 @@ export default function App() {
   }, []);
 
   const login = async () => {
-    setScreen("dashboard");
-    setBackendStatus("connecting");
-    try {
-      const activeUser = await api.createDemoUser();
-      setUser(activeUser);
-      await loadBackendData(activeUser);
-    } catch {
-      setBackendStatus("offline");
+    const response = await fetch('/api/auth/google/url');
+    const data = await response.json();
+    if (data?.url) {
+      window.location.href = data.url;
     }
   };
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  useEffect(() => {
+    if (hasStoredSession()) {
+      setScreen("dashboard");
+    }
+  }, []);
 
   if (screen === "login") {
     return (
