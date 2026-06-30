@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.agents.orchestrator import orchestrator
+from app.api.deps import get_current_user, get_google_token
+from app.models.user import User
 from app.schemas.agent import (
     AgentResponse,
     ChatRequest,
@@ -15,17 +17,29 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=AgentResponse)
-async def chat(payload: ChatRequest) -> AgentResponse:
-    return await orchestrator.chat(payload)
+async def chat(
+    payload: ChatRequest,
+    user: User = Depends(get_current_user),
+    google_token: str = Depends(get_google_token),
+) -> AgentResponse:
+    payload.user_id = user.id
+    return await orchestrator.chat(payload, access_token=google_token)
 
 
 @router.post("/screener/run", response_model=AgentResponse)
-async def run_screener(payload: ScreenerRequest) -> AgentResponse:
-    return await orchestrator.screener.run(payload.user_id, payload.gmail_query)
+async def run_screener(
+    payload: ScreenerRequest,
+    user: User = Depends(get_current_user),
+    google_token: str = Depends(get_google_token),
+) -> AgentResponse:
+    return await orchestrator.screener.run(user.id, payload.gmail_query, access_token=google_token)
 
 
 @router.post("/reverse-plan", response_model=ReversePlanResponse)
-async def reverse_plan(payload: ReversePlanRequest) -> ReversePlanResponse:
+async def reverse_plan(
+    payload: ReversePlanRequest,
+    user: User = Depends(get_current_user),
+) -> ReversePlanResponse:
     micro_tasks = create_micro_tasks(payload.title, payload.estimated_minutes)
     return ReversePlanResponse(
         title=payload.title,
@@ -44,7 +58,10 @@ async def reverse_plan(payload: ReversePlanRequest) -> ReversePlanResponse:
 
 
 @router.post("/panic", response_model=AgentResponse)
-async def panic_mode(user_id: str, task_title: str) -> AgentResponse:
+async def panic_mode(
+    task_title: str,
+    user: User = Depends(get_current_user),
+) -> AgentResponse:
     plan = await orchestrator.guardian.panic_plan(task_title)
     return AgentResponse(
         message="Panic Mode plan created.",
@@ -60,7 +77,11 @@ async def panic_mode(user_id: str, task_title: str) -> AgentResponse:
 
 
 @router.post("/focus", response_model=AgentResponse)
-async def focus_mode(user_id: str, task_title: str, minutes: int = 25) -> AgentResponse:
+async def focus_mode(
+    task_title: str,
+    minutes: int = 25,
+    user: User = Depends(get_current_user),
+) -> AgentResponse:
     return AgentResponse(
         message="Focus Mode started.",
         recommendations=[
@@ -70,7 +91,7 @@ async def focus_mode(user_id: str, task_title: str, minutes: int = 25) -> AgentR
         tool_calls=[
             ToolCall(
                 name="start_focus_mode",
-                arguments={"user_id": user_id, "task_title": task_title, "minutes": minutes},
+                arguments={"user_id": user.id, "task_title": task_title, "minutes": minutes},
                 status="completed",
                 result={"ok": True, "mode": "local_focus"},
             )
@@ -79,5 +100,12 @@ async def focus_mode(user_id: str, task_title: str, minutes: int = 25) -> AgentR
 
 
 @router.post("/one-click-starter")
-async def one_click_starter(user_id: str, title: str, output: str = "doc") -> dict:
-    return await orchestrator.executor.one_click_starter(user_id=user_id, title=title, output=output)
+async def one_click_starter(
+    title: str,
+    output: str = "doc",
+    user: User = Depends(get_current_user),
+    google_token: str = Depends(get_google_token),
+) -> dict:
+    return await orchestrator.executor.one_click_starter(
+        user_id=user.id, title=title, output=output, access_token=google_token,
+    )

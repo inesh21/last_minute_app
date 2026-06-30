@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DEFAULT_SQLITE_PATH = Path("C:/tmp/last-minute-lifesaver.db")
 DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DEV_JWT_SECRET = "dev-only-9db70016a7c84e2ba2e26af02137116d8c1f1f0fb6c34d28"
 
 
 def _read_env_file() -> dict[str, str]:
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://127.0.0.1:8000/api/auth/google/callback"
 
-    jwt_secret: str = "change-me-in-production"
+    jwt_secret: str = DEFAULT_DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
 

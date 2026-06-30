@@ -1,254 +1,245 @@
-# Last Minute Lifesaver — AI Handoff Document
+# Last Minute Lifesaver - AI Handoff
 
-This document is meant to help another developer or AI agent quickly understand the project, how it is structured, what has already been implemented, and what still needs to be finished for a strong hackathon submission.
+This document is for Enol and any future developer or AI agent continuing the project. It captures the current state of the app, the files that matter most, and the shortest path to a convincing demo.
 
-## 1. Project summary
+## 1. Product Summary
 
-Last Minute Lifesaver is an AI-powered productivity companion designed to help users stay ahead of deadlines. Instead of acting like a simple reminder app, the product is intended to behave more like an AI chief of staff that can:
+Last Minute Lifesaver is an AI productivity companion for people who are close to missing deadlines. The intended product loop is:
 
-- detect deadlines and risk
-- create actionable plans
-- suggest or trigger follow-up actions
-- help users recover from procrastination or overload
-- surface a dashboard of priorities and threat levels
+user has deadlines -> app detects risk -> app creates a plan -> app helps the user act
 
-The current repository is an early but functional prototype with:
+The app should feel less like a reminder list and more like an AI chief of staff that can inspect work signals, identify what is urgent, and trigger concrete Google Workspace actions.
 
-- a React + Vite frontend
+## 2. Current State
+
+The repository is a working prototype with:
+
+- a React/Vite frontend app shell
 - a FastAPI backend
-- a lightweight task and dashboard layer
-- agent orchestration logic
-- basic integrations and API routes
+- local SQLite persistence
+- task and dashboard APIs
+- Google OAuth sign-in
+- JWT-protected backend routes
+- server-side Google token storage
+- Gemini service scaffolding with tool declarations
+- Google Workspace tool wrappers for Calendar, Gmail, Tasks, Docs, and Slides
 
-## 2. Product goal for the hackathon
+The strongest current story is: sign in with Google, keep a frontend session via JWT, call protected APIs, and route AI requests through backend agent/tool infrastructure.
 
-The hackathon version should demonstrate three things clearly:
+## 3. Frontend Notes
 
-1. The core idea is compelling and easy to understand.
-2. The app can show real productivity intelligence, not just static UI.
-3. The end-to-end experience feels complete enough to demo in a few minutes.
+The frontend was refactored from a single monolithic `App.tsx` to a React Router architecture. Each screen is now its own page component with URL-based routing.
 
-## 3. Current implementation status
+### Architecture
 
-### Completed / present
+- [frontend/src/app/router.tsx](frontend/src/app/router.tsx) - BrowserRouter with all route definitions
+- [frontend/src/layouts/AuthenticatedLayout.tsx](frontend/src/layouts/AuthenticatedLayout.tsx) - sidebar, topbar, auth guard, data loading; wraps all authenticated routes via React Router `<Outlet>`
+- [frontend/src/hooks/useAppContext.ts](frontend/src/hooks/useAppContext.ts) - typed hook for accessing shared app state (user, dashboard, tasks) from outlet context
+- [frontend/src/components/shared.tsx](frontend/src/components/shared.tsx) - shared UI primitives (Card, Badge, ProgressBar, Btn)
+- [frontend/src/lib/helpers.ts](frontend/src/lib/helpers.ts) - types, constants, and formatting utilities shared across pages
 
-#### Frontend
-- A polished dashboard-style UI exists in the React app.
-- Core screens include:
-  - login
-  - dashboard
-  - AI command
-  - calendar
-  - tasks
-  - deadlines
-  - panic mode
-  - focus mode
-  - workspace
-  - analytics
-- The app fetches backend data for dashboard, tasks, and AI actions.
-- The UI is structured around feature folders under the frontend feature modules.
+### Page components (one per screen)
 
-#### Backend
-- A FastAPI app is running with a health endpoint.
-- API routing is wired for:
-  - auth
-  - users
-  - tasks
-  - dashboard
-  - AI agents
-  - calendar
-  - webhooks
-- The backend has an orchestrator that routes user requests to agent behaviors.
-- Basic task and dashboard services exist.
-- Task risk calculation and dashboard threat summarization are implemented.
-- A local SQLite-backed database setup exists.
+- [frontend/src/pages/LoginPage.tsx](frontend/src/pages/LoginPage.tsx) - `/login`
+- [frontend/src/pages/DashboardPage.tsx](frontend/src/pages/DashboardPage.tsx) - `/` (index)
+- [frontend/src/pages/AICommandPage.tsx](frontend/src/pages/AICommandPage.tsx) - `/ai-command`
+- [frontend/src/pages/CalendarPage.tsx](frontend/src/pages/CalendarPage.tsx) - `/calendar`
+- [frontend/src/pages/TasksPage.tsx](frontend/src/pages/TasksPage.tsx) - `/tasks`
+- [frontend/src/pages/DeadlineCenterPage.tsx](frontend/src/pages/DeadlineCenterPage.tsx) - `/deadlines`
+- [frontend/src/pages/PanicModePage.tsx](frontend/src/pages/PanicModePage.tsx) - `/panic`
+- [frontend/src/pages/FocusModePage.tsx](frontend/src/pages/FocusModePage.tsx) - `/focus`
+- [frontend/src/pages/WorkspacePage.tsx](frontend/src/pages/WorkspacePage.tsx) - `/workspace`
+- [frontend/src/pages/AnalyticsPage.tsx](frontend/src/pages/AnalyticsPage.tsx) - `/analytics`
 
-#### Agent system
-- The backend includes separate agent modules for:
-  - screener
-  - triage
-  - executor
-  - guardian
-  - memory
-- The orchestrator routes requests to these agents.
-- There are starter implementations for executor and guardian behaviors.
+### Route wrappers
 
-#### Integrations
-- The project includes integration folders for Google-related services such as:
-  - Calendar
-  - Gmail
-  - Docs
-  - Drive
-  - Slides
-  - Maps
-  - OAuth
-- The app is prepared for future connection to Google and Gemini services.
+Thin components in [frontend/src/app/routes/](frontend/src/app/routes/) connect React Router outlet context to page component props. Pages that need shared state (dashboard data, tasks, user) receive it through these wrappers via `useAppContext()`.
 
-### Still incomplete / not fully wired
+### Other important files
 
-- Gemini integration is mostly scaffolded rather than fully production-ready.
-- The app does not yet provide a fully polished real-world workflow for all integrations.
-- A lot of the agent behavior is currently lightweight and should be better demonstrated in the demo.
-- Some backend features are present but not fully validated through real user flows.
-- The repository still needs a stronger finish for hackathon judging, especially around demo clarity and reliability.
+- [frontend/src/features/auth/AuthCallback.tsx](frontend/src/features/auth/AuthCallback.tsx) - stores callback token/session details after OAuth, at `/auth/callback`
+- [frontend/src/services/api.ts](frontend/src/services/api.ts) - API client, auth headers, and `401` session cleanup
+- [frontend/src/services/config.ts](frontend/src/services/config.ts) - frontend API base URL config
+- [frontend/vite.config.ts](frontend/vite.config.ts) - local proxy for `/api` and `/health`
+- [frontend/.env.example](frontend/.env.example) - local frontend environment template
 
-### Auth status
+### Deprecated files (no longer imported)
 
-- The Google OAuth callback path is now wired so the frontend receives the tokens and redirects the user back into the main app.
-- The app now checks for a saved auth session on startup and restores the dashboard view automatically after callback completion.
-- Local testing should verify that the browser lands on the main app after the callback instead of returning to the login screen.
+- `frontend/src/app/App.tsx` - the old monolithic component; all screens have been extracted to `src/pages/`
+- `frontend/src/app/layout.tsx` - the old `AppLayout` wrapper; replaced by `AuthenticatedLayout`
 
-## 4. Architecture overview
+### Navigation
 
-### Frontend structure
+Every sidebar item navigates to its own URL route using React Router's `useNavigate()`. Cross-page links (e.g. "View all" on the dashboard tasks card navigating to `/tasks`, or "Activate Panic Mode" on the deadline center navigating to `/panic`) also use `useNavigate()`. The `AuthenticatedLayout` checks for a JWT on mount and redirects to `/login` if none is found.
 
-The frontend is centered around the app shell and feature modules.
+Implemented frontend capabilities:
 
-Key files:
-- [frontend/src/app/App.tsx](frontend/src/app/App.tsx)
-- [frontend/src/app/router.tsx](frontend/src/app/router.tsx)
-- [frontend/src/services/api.ts](frontend/src/services/api.ts)
+- URL-based routing with React Router v7 (`BrowserRouter`)
+- screens for dashboard, tasks, calendar, AI command, focus, panic, workspace, analytics, and auth
+- Google sign-in entry point
+- auth callback handling
+- saved JWT session restoration
+- authenticated API calls using `Authorization: Bearer <jwt_token>`
+- redirect back to the login page when the backend returns `401`
+- sidebar navigation highlights the active route
 
-How it works:
-- The main app component contains the UI screens and navigation logic.
-- The router is a thin wrapper around the app layout.
-- The API service layer calls the FastAPI backend for dashboard data, tasks, and AI actions.
-- Feature folders under the frontend organize UI by capability.
+## 4. Backend Notes
 
-### Backend structure
+Important files:
 
-The backend entrypoint is the FastAPI app, which wires all routes and middleware.
+- [backend/app/main.py](backend/app/main.py) - FastAPI app entrypoint
+- [backend/app/api/router.py](backend/app/api/router.py) - route composition under `/api`
+- [backend/app/api/deps.py](backend/app/api/deps.py) - current-user JWT dependency and Google token refresh helper
+- [backend/app/api/routes/auth.py](backend/app/api/routes/auth.py) - Google OAuth URL and callback endpoints
+- [backend/app/api/routes/users.py](backend/app/api/routes/users.py) - current-user endpoint
+- [backend/app/api/routes/tasks.py](backend/app/api/routes/tasks.py) - task CRUD endpoints
+- [backend/app/api/routes/dashboard.py](backend/app/api/routes/dashboard.py) - dashboard summary endpoint
+- [backend/app/api/routes/agents.py](backend/app/api/routes/agents.py) - AI chat, screener, panic, focus, and starter endpoints
+- [backend/app/core/config.py](backend/app/core/config.py) - local config, `.env` loading, Google/Gemini/JWT settings
+- [backend/app/database/session.py](backend/app/database/session.py) - async SQLAlchemy engine/session setup
+- [backend/app/services/jwt.py](backend/app/services/jwt.py) - JWT create/decode helpers
+- [backend/app/services/google_api.py](backend/app/services/google_api.py) - direct Google API wrappers
+- [backend/app/services/gemini.py](backend/app/services/gemini.py) - Gemini chat, tool declarations, and tool-call execution loop
+- [backend/app/tools/registry.py](backend/app/tools/registry.py) - maps tool names to backend tool implementations
 
-Key files:
-- [backend/app/main.py](backend/app/main.py)
-- [backend/app/api/router.py](backend/app/api/router.py)
-- [backend/app/core/config.py](backend/app/core/config.py)
+Implemented backend capabilities:
 
-How it works:
-- The main app initializes the database and optional scheduler.
-- It includes the API router at the /api prefix.
-- Configuration is pulled from environment variables and .env files.
+- `/health`
+- `/api/auth/google/url`
+- `/api/auth/google/callback`
+- `/api/users/me`
+- `/api/tasks`
+- `/api/dashboard`
+- `/api/ai/chat`
+- `/api/ai/screener/run`
+- `/api/ai/reverse-plan`
+- `/api/ai/panic`
+- `/api/ai/focus`
+- `/api/ai/one-click-starter`
+- `/api/calendar/events`
 
-### API routes
+Most useful backend behavior:
 
-The route layer groups features into logical endpoints.
+- Google OAuth callback creates or updates a `User`.
+- Google access and refresh tokens are stored on the user record.
+- The backend creates a JWT and redirects to the frontend callback route.
+- Protected routes use `get_current_user`.
+- AI routes can require a valid Google token through `get_google_token`.
+- If a Google access token is expired and a refresh token exists, the backend attempts refresh.
 
-Key files:
-- [backend/app/api/routes/agents.py](backend/app/api/routes/agents.py)
-- [backend/app/api/routes/dashboard.py](backend/app/api/routes/dashboard.py)
-- [backend/app/api/routes/tasks.py](backend/app/api/routes/tasks.py)
+## 5. AI And Tool Flow
 
-How it works:
-- The AI routes expose chat, screener, panic, focus, and starter actions.
-- The dashboard route calculates threat level and recommendation summaries.
-- The tasks route supports creating, listing, and updating tasks.
+The intended flow is:
 
-### Agent orchestration
+1. Frontend sends a request to `/api/ai/chat`.
+2. Backend resolves the signed-in user from the JWT.
+3. Backend resolves or refreshes the user's Google token.
+4. The orchestrator handles the chat request.
+5. Gemini receives tool declarations when configured.
+6. If Gemini emits function calls, `backend/app/tools/registry.py` executes the matching Google Workspace actions.
+7. The backend returns a message, recommendations, and tool call results to the UI.
 
-The orchestrator coordinates the agent stack.
+Current declared tools include:
 
-Key file:
-- [backend/app/agents/orchestrator.py](backend/app/agents/orchestrator.py)
+- `read_calendar`
+- `create_calendar_event`
+- `read_gmail`
+- `draft_gmail`
+- `create_google_task`
+- `create_google_doc`
+- `create_google_slides`
 
-How it works:
-- It creates the screener, triage, executor, and guardian agents.
-- It maps simple user requests into tool-like actions.
-- It returns a response containing tool calls and recommendations.
+The non-Gemini fallback path still exists through the agent scaffolding, but the more compelling demo path is Gemini plus a real Google tool call.
 
-### Data model and persistence
+## 6. Local Development
 
-The backend uses SQLAlchemy models and schemas.
+Backend:
 
-Key files:
-- [backend/app/models/task.py](backend/app/models/task.py)
-- [backend/app/schemas/task.py](backend/app/schemas/task.py)
-- [backend/app/database/session.py](backend/app/database/session.py)
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
 
-How it works:
-- Tasks are stored in the local database.
-- The dashboard API reads tasks and calculates risk and completion metrics.
-- The app is structured to support more entities later, such as sessions, notifications, habits, and workspace connections.
+Frontend:
 
-## 5. File-to-file relationships
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev -- --host 127.0.0.1 --port 5173
+```
 
-This section explains how the app pieces connect.
+Expected local URLs:
 
-### User flow: dashboard load
-1. The frontend calls the API service in [frontend/src/services/api.ts](frontend/src/services/api.ts).
-2. The request hits the dashboard endpoint in [backend/app/api/routes/dashboard.py](backend/app/api/routes/dashboard.py).
-3. The dashboard route reads tasks from the database via [backend/app/database/session.py](backend/app/database/session.py).
-4. The route uses risk logic from [backend/app/services/risk.py](backend/app/services/risk.py).
-5. The frontend renders the resulting dashboard summary.
+- frontend: http://127.0.0.1:5173
+- backend: http://127.0.0.1:8000
+- backend docs: http://127.0.0.1:8000/docs
 
-### User flow: create a task
-1. The UI triggers a task creation action from the frontend service layer.
-2. The request hits [backend/app/api/routes/tasks.py](backend/app/api/routes/tasks.py).
-3. The route creates a Task entity and stores it in the database.
-4. The task gets risk calculation and is returned to the UI.
+Backend `.env` values needed for the full demo:
 
-### User flow: AI chat or assistant action
-1. The frontend calls the AI endpoint from [frontend/src/services/api.ts](frontend/src/services/api.ts).
-2. The request reaches [backend/app/api/routes/agents.py](backend/app/api/routes/agents.py).
-3. The agent route calls the orchestrator in [backend/app/agents/orchestrator.py](backend/app/agents/orchestrator.py).
-4. The orchestrator routes work to the appropriate agent logic and tool registry.
-5. The response is returned to the UI and displayed as agent recommendations or tool calls.
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/auth/google/callback
+FRONTEND_URL=http://127.0.0.1:5173
+GEMINI_API_KEY=
+JWT_SECRET=change-me-in-production
+```
 
-### App shell and navigation
-1. [frontend/src/app/router.tsx](frontend/src/app/router.tsx) wraps the app in the shared layout.
-2. [frontend/src/app/App.tsx](frontend/src/app/App.tsx) contains the full UI and screen state.
-3. The app uses the API service layer to connect the UI to the backend.
+## 7. Known Gaps
 
-## 6. What still needs to be done for a complete hackathon submission
+The project is not production-complete yet. The main gaps are:
 
-### High priority
-- Make the demo flow feel smooth and intentional.
-- Ensure the frontend and backend start reliably together.
-- Add a short, polished onboarding flow so judges understand the product quickly.
-- Make the AI assistant responses feel more meaningful and less placeholder-like.
-- Connect at least one real external integration convincingly, such as Google Calendar or Gmail.
+- The full browser login -> callback -> dashboard flow still needs repeated manual verification.
+- Google OAuth scopes and consent-screen settings must match the Workspace actions used in the demo.
+- Gemini/tool execution needs real credential testing against Calendar, Gmail, Tasks, Docs, and Slides.
+- Error states for missing Google credentials, expired sessions, failed tool calls, and empty data are still basic.
+- The frontend AI screens need to make completed tool actions more visible and satisfying.
+- Panic/focus flows are useful scaffolds, but they should feel more action-oriented in the UI.
+- Tests are limited; critical auth, task, dashboard, and AI paths need coverage before production use.
 
-### Medium priority
-- Finish the auth flow so users can log in and see their own data.
-- Improve the agent prompts and tool logic so the assistant makes more specific plans.
-- Add a stronger “panic mode” experience with visible recovery actions.
-- Add better task lifecycle behavior, such as progress updates and completion states.
-- Polish the dashboard and analytics visuals for presentation.
+## 8. Recommended Next Milestone
 
-### Nice-to-have for judging
-- Add a short intro or demo script in the README.
-- Add screenshots or GIFs to the repository.
-- Add a concise architecture summary for judges.
-- Ensure the app can be launched locally with clear commands.
-- Add a short “how to demo” section to the docs.
+Build one polished demo path instead of widening scope:
 
-## 7. Recommended hackathon finish line
+1. Start frontend and backend locally.
+2. Sign in with Google.
+3. Confirm the frontend stores `jwt_token`.
+4. Confirm `/api/users/me`, `/api/tasks`, and `/api/dashboard` work with the JWT.
+5. Create or load a task with a visible deadline.
+6. Ask the AI assistant for help.
+7. Have Gemini execute one concrete Google action, preferably creating a calendar event, Google Task, Doc, Slide deck, or Gmail draft.
+8. Show the returned action result clearly in the UI.
 
-If the goal is to submit a strong project, the best version of this app should be able to demonstrate:
+This is the highest-value finish line for a hackathon or product demo.
 
-- a login or demo-user experience
-- a dashboard showing deadlines and risk
-- at least one AI-assisted action
-- a clear task or focus workflow
-- one believable integration with Google or another external service
-- a polished presentation and demo story
+## 9. Priorities
 
-## 8. Suggested next steps
+Highest priority:
 
-1. Tighten the demo narrative.
-2. Make the AI assistant responses concrete and useful.
-3. Connect at least one real integration.
-4. Make task creation and dashboard updates feel immediate and reliable.
-5. Add polished copy, visuals, and a short demo script.
-6. Run the app locally and test the full flow end to end.
+- verify Google OAuth end to end
+- verify JWT-protected frontend API calls after callback
+- configure Gemini and prove one real tool call works
+- polish the AI response display so tool actions are obvious
+- make dashboard/tasks data feel coherent during the demo
 
-## 9. Quick implementation notes for the next agent
+Medium priority:
 
-When continuing this project, focus on:
-- reliability over scope
-- a clear demo path over extra features
-- visible AI behavior over hidden backend complexity
-- one polished workflow instead of many half-finished ones
+- improve empty/error states
+- make panic and focus modes visibly actionable
+- add a short demo script or screenshots
+- add focused tests for auth dependencies and task/dashboard routes
 
-The best hackathon strategy is to make the core loop feel impressive and easy to explain:
+Nice to have:
 
-user has deadlines -> app sees risk -> app proposes a plan -> app helps the user act.
+- richer onboarding
+- more realistic analytics
+- stronger persistence model for sessions, notifications, habits, and workspace state
+
+## 10. Final Guidance
+
+The app already has enough structure. The next developer should resist adding broad new surfaces until the core journey is reliable.
+
+Make the product do one impressive thing all the way through: understand a risky deadline, produce a concrete plan, and take one real action for the user.

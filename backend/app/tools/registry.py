@@ -12,6 +12,7 @@ class ToolRegistry:
             "read_gmail": GmailTool("read_gmail"),
             "draft_gmail": GmailTool("draft_gmail"),
             "read_calendar": CalendarTool("read_calendar"),
+            "create_calendar_event": CalendarTool("create_calendar_event"),
             "update_calendar": CalendarTool("update_calendar"),
             "create_google_task": TasksTool("create_google_task"),
             "create_google_doc": DocsTool("create_google_doc"),

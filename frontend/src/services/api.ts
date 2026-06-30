@@ -47,16 +47,37 @@ export type BackendAgentResponse = {
   recommendations: string[];
 };
 
+export type CalendarEvent = {
+  id: string;
+  summary?: string;
+  description?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  htmlLink?: string;
+};
+
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("jwt_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...init?.headers,
     },
     ...init,
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("auth_session");
+      window.location.replace("/");
+      throw new Error("Session expired. Please sign in again.");
+    }
     const detail = await response.text();
     throw new Error(detail || `Backend request failed: ${response.status}`);
   }
@@ -75,46 +96,69 @@ function query(params: Record<string, string | number | boolean | undefined>) {
 export const api = {
   health: () => request<{ status: string; service: string }>('/health'),
 
-  createDemoUser: () =>
-    request<BackendUser>('/api/users', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: 'alex.demo@example.com',
-        name: 'Alex',
-      }),
-    }),
+  getMe: () => request<BackendUser>('/api/users/me'),
 
-  getDashboard: (userId: string) =>
-    request<BackendDashboard>(`/api/dashboard?${query({ user_id: userId })}`),
+  getDashboard: () => request<BackendDashboard>('/api/dashboard'),
 
-  getTasks: (userId: string) => request<BackendTask[]>(`/api/tasks?${query({ user_id: userId })}`),
+  getTasks: () => request<BackendTask[]>('/api/tasks'),
 
-  createTask: (userId: string, title: string) =>
-    request<BackendTask>(`/api/tasks?${query({ user_id: userId })}`, {
+  createTask: (title: string, description = '', priority = 3, estimatedMinutes = 30, deadlineAt: string | null = null) =>
+    request<BackendTask>('/api/tasks', {
       method: 'POST',
       body: JSON.stringify({
         title,
-        description: 'Created from the frontend.',
-        priority: 3,
-        estimated_minutes: 30,
-        deadline_at: null,
+        description,
+        priority,
+        estimated_minutes: estimatedMinutes,
+        deadline_at: deadlineAt,
       }),
     }),
 
-  chat: (userId: string, message: string) =>
+  updateTask: (taskId: string, updates: Record<string, unknown>) =>
+    request<BackendTask>(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+
+  deleteTask: (taskId: string) =>
+    request<{ status: string; id: string }>(`/api/tasks/${taskId}`, {
+      method: 'DELETE',
+    }),
+
+  chat: (message: string) =>
     request<BackendAgentResponse>('/api/ai/chat', {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId, message, context: {} }),
+      body: JSON.stringify({ user_id: '', message, context: {} }),
     }),
 
-  panic: (userId: string, taskTitle: string) =>
-    request<BackendAgentResponse>(`/api/ai/panic?${query({ user_id: userId, task_title: taskTitle })}`, {
+  panic: (taskTitle: string) =>
+    request<BackendAgentResponse>(`/api/ai/panic?${query({ task_title: taskTitle })}`, {
       method: 'POST',
     }),
 
-  focus: (userId: string, taskTitle: string, minutes = 25) =>
+  focus: (taskTitle: string, minutes = 25) =>
     request<BackendAgentResponse>(
-      `/api/ai/focus?${query({ user_id: userId, task_title: taskTitle, minutes })}`,
+      `/api/ai/focus?${query({ task_title: taskTitle, minutes })}`,
       { method: 'POST' },
     ),
+
+  oneClickStarter: (title: string, output: 'doc' | 'slides' = 'doc') =>
+    request<Record<string, unknown>>(
+      `/api/ai/one-click-starter?${query({ title, output })}`,
+      { method: 'POST' },
+    ),
+
+  getCalendarEvents: (days = 7) =>
+    request<{ events: CalendarEvent[]; count: number }>(
+      `/api/calendar/events?${query({ days })}`,
+    ),
+
+  screenerRun: (gmailQuery = 'newer_than:7d') =>
+    request<BackendAgentResponse>('/api/ai/screener/run', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: '', gmail_query: gmailQuery }),
+    }),
+
+  getGoogleAuthUrl: () =>
+    request<{ url: string; state: string }>('/api/auth/google/url'),
 };

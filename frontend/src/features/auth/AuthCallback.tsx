@@ -4,17 +4,19 @@ import { Loader2 } from 'lucide-react';
 export function AuthCallback() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const accessToken = params.get('access_token');
+    const token = params.get('token');
     const email = params.get('email');
     const name = params.get('name');
+    const userId = params.get('user_id');
 
-    if (accessToken) {
-      localStorage.setItem('access_token', accessToken);
+    if (token) {
+      localStorage.setItem('jwt_token', token);
       localStorage.setItem('email', email ?? '');
       localStorage.setItem('name', name ?? '');
+      localStorage.setItem('user_id', userId ?? '');
       localStorage.setItem(
         'auth_session',
-        JSON.stringify({ accessToken, email, name }),
+        JSON.stringify({ token, email, name, userId }),
       );
     }
 

@@ -14,7 +14,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line
 } from "recharts";
-import { api, type BackendDashboard, type BackendTask, type BackendUser } from "../services/api";
+import { api, type BackendDashboard, type BackendTask, type BackendUser, type CalendarEvent } from "../services/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -244,11 +244,13 @@ function DashboardScreen({
   dashboard,
   tasks: backendTasks,
   backendStatus,
+  user,
 }: {
   onNavigate: (s: Screen) => void;
   dashboard: BackendDashboard | null;
   tasks: BackendTask[];
   backendStatus: "connecting" | "connected" | "offline";
+  user: BackendUser | null;
 }) {
   const threat: ThreatLevel = normalizeThreat(dashboard?.threat_level) || "high-risk";
   const tc = threatConfig[threat];
@@ -281,12 +283,41 @@ function DashboardScreen({
     ? dashboard.upcoming_deadlines.map(taskFromBackend)
     : tasks;
 
+  if (backendStatus === "connecting") {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div><div className="h-7 w-48 bg-muted rounded" /><div className="h-4 w-64 bg-muted rounded mt-2" /></div>
+          <div className="h-9 w-28 bg-muted rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-muted rounded-xl" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 h-64 bg-muted rounded-xl" />
+          <div className="h-64 bg-muted rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = user?.name?.split(" ")[0] || "there";
+  const dateStr = new Intl.DateTimeFormat(undefined, {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  }).format(now);
+  const timeStr = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric", minute: "2-digit",
+  }).format(now);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1>Good morning, Alex</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Monday, 30 June 2025 · 08:42 AM</p>
+          <h1>{greeting}, {firstName}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{dateStr} · {timeStr}</p>
         </div>
         <Btn variant="secondary" onClick={() => onNavigate("panic")}>
           <Zap size={14} /> Panic Mode
@@ -408,7 +439,7 @@ function DashboardScreen({
 
 // ── Screen: AI Command Center ──────────────────────────────────────────────
 
-function AICommandScreen({ userId }: { userId: string | null }) {
+function AICommandScreen() {
   const [messages, setMessages] = useState([
     { role: "assistant", text: "Hello Alex. I've reviewed your schedule and detected 2 high-risk deadlines today. How can I help you right now?" },
     { role: "user", text: "I can't finish my research paper by tonight." },
@@ -430,13 +461,9 @@ function AICommandScreen({ userId }: { userId: string | null }) {
     const message = input;
     setMessages(m => [...m, { role: "user", text: message }]);
     setInput("");
-    if (!userId) {
-      setMessages(m => [...m, { role: "assistant", text: "Sign in first so I can connect this request to your backend workspace." }]);
-      return;
-    }
 
     try {
-      const response = await api.chat(userId, message);
+      const response = await api.chat(message);
       const toolSummary = response.tool_calls.length
         ? `\n\nTools: ${response.tool_calls.map(tool => `${tool.name} (${tool.status})`).join(", ")}`
         : "";
@@ -445,7 +472,7 @@ function AICommandScreen({ userId }: { userId: string | null }) {
         : "";
       setMessages(m => [...m, { role: "assistant", text: `${response.message}${toolSummary}${recommendations}` }]);
     } catch (error) {
-      setMessages(m => [...m, { role: "assistant", text: `Backend request failed: ${error instanceof Error ? error.message : "Unknown error"}` }]);
+      setMessages(m => [...m, { role: "assistant", text: `Request failed: ${error instanceof Error ? error.message : "Unknown error"}` }]);
     }
   };
 
@@ -529,21 +556,36 @@ function AICommandScreen({ userId }: { userId: string | null }) {
 
 function CalendarScreen() {
   const [view, setView] = useState<"week" | "month">("week");
+  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
   const hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
-  const days = ["Mon 30", "Tue 1", "Wed 2", "Thu 3", "Fri 4"];
 
-  const events: Record<string, { title: string; type: string; span: number; color: string }[]> = {
-    "Mon 30": [
-      { title: "Team Standup", type: "meeting", span: 1, color: "bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200" },
-      { title: "Research Paper [Focus]", type: "focus", span: 2, color: "bg-violet-200 dark:bg-violet-900/50 text-violet-800 dark:text-violet-200" },
-      { title: "Lunch Break", type: "buffer", span: 1, color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" },
-      { title: "Client Call", type: "meeting", span: 1, color: "bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200" },
-    ],
-    "Tue 1": [
-      { title: "Write Paper Draft", type: "micro", span: 1, color: "bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200" },
-      { title: "Client Presentation", type: "deadline", span: 1, color: "bg-rose-200 dark:bg-rose-900/50 text-rose-800 dark:text-rose-200" },
-    ],
-  };
+  useEffect(() => {
+    setLoading(true);
+    api.getCalendarEvents(7)
+      .then(data => setCalEvents(data.events))
+      .catch(() => setCalEvents([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const today = new Date();
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const days = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    return `${dayNames[d.getDay()]} ${d.getDate()}`;
+  });
+
+  function eventsForDayHour(dayIdx: number, hour: number) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + dayIdx);
+    return calEvents.filter(ev => {
+      const start = ev.start?.dateTime || ev.start?.date;
+      if (!start) return false;
+      const s = new Date(start);
+      return s.getDate() === d.getDate() && s.getMonth() === d.getMonth() && s.getHours() === hour;
+    });
+  }
 
   const aiSuggestions = [
     { text: "Move Client Call to Wed 2 PM to create a 3h focus block for your research paper" },
@@ -580,15 +622,15 @@ function CalendarScreen() {
             {hours.map(h => (
               <div key={h} className="grid grid-cols-6 border-b border-border/50 min-h-[52px]">
                 <div className="p-2 text-xs text-muted-foreground text-right pr-3 pt-2 font-[DM_Mono]">{h}:00</div>
-                {days.map(d => {
-                  const ev = events[d]?.find((_, i) => i === (h - 8) % (events[d]?.length || 1));
+                {days.map((d, dIdx) => {
+                  const matchedEvents = eventsForDayHour(dIdx, h);
                   return (
                     <div key={d} className="border-l border-border/50 p-1">
-                      {ev && h - 8 < (events[d]?.length || 0) && (
-                        <div className={`text-xs rounded px-1.5 py-1 leading-tight ${ev.color}`}>
-                          <div className="font-medium">{ev.title}</div>
+                      {matchedEvents.map(ev => (
+                        <div key={ev.id} className="text-xs rounded px-1.5 py-1 leading-tight bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200">
+                          <div className="font-medium">{ev.summary || "Untitled"}</div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   );
                 })}
@@ -638,8 +680,31 @@ function CalendarScreen() {
 
 // ── Screen: Tasks ─────────────────────────────────────────────────────────
 
-function TasksScreen({ tasks: backendTasks }: { tasks: BackendTask[] }) {
+function TasksScreen({ tasks: backendTasks, onTasksChange }: { tasks: BackendTask[]; onTasksChange: () => void }) {
   const [expanded, setExpanded] = useState<number | null>(0);
+  const [filter, setFilter] = useState("All");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newPriority, setNewPriority] = useState(3);
+  const [newMinutes, setNewMinutes] = useState(30);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const filteredBackend = backendTasks.filter(t => {
+    if (filter === "All") return true;
+    if (filter === "Today") {
+      if (!t.deadline_at) return false;
+      const d = new Date(t.deadline_at);
+      const now = new Date();
+      return d.toDateString() === now.toDateString();
+    }
+    if (filter === "High Risk") return t.risk_score >= 0.6;
+    if (filter === "In Progress") return t.status === "in_progress";
+    if (filter === "Done") return t.status === "done";
+    return true;
+  });
 
   const fallbackTasks: AppTask[] = [
     {
@@ -654,44 +719,59 @@ function TasksScreen({ tasks: backendTasks }: { tasks: BackendTask[] }) {
       subtasks: ["Read rubric (done)", "Find 5 sources", "Write introduction", "Write methodology", "Add citations", "Proofread"],
       deps: ["Library Access"],
     },
-    {
-      title: "Client Presentation Deck",
-      deadline: "1 Jul 9:00 AM",
-      priority: "orange",
-      priorityLabel: "High",
-      effort: "4h",
-      completion: 62,
-      prediction: 71,
-      risk: 54,
-      subtasks: ["Outline structure (done)", "Design slides 1–5 (done)", "Design slides 6–12", "Add data visualizations", "Rehearse narrative"],
-      deps: ["Brand Assets", "Q2 Data"],
-    },
-    {
-      title: "Sprint Backlog Review",
-      deadline: "2 Jul 3:00 PM",
-      priority: "amber",
-      priorityLabel: "Medium",
-      effort: "1.5h",
-      completion: 80,
-      prediction: 92,
-      risk: 21,
-      subtasks: ["Review tickets (done)", "Estimate story points (done)", "Flag blockers", "Update Jira"],
-      deps: [],
-    },
-    {
-      title: "Submit Monthly Expense Report",
-      deadline: "4 Jul 5:00 PM",
-      priority: "green",
-      priorityLabel: "Low",
-      effort: "45m",
-      completion: 90,
-      prediction: 98,
-      risk: 8,
-      subtasks: ["Collect receipts (done)", "Fill template (done)", "Manager approval"],
-      deps: ["Finance Portal"],
-    },
   ];
-  const tasks = backendTasks.length > 0 ? backendTasks.map(taskFromBackend) : fallbackTasks;
+  const tasks = backendTasks.length > 0 ? filteredBackend.map(taskFromBackend) : fallbackTasks;
+  const taskIds = backendTasks.length > 0 ? filteredBackend.map(t => t.id) : [];
+
+  const handleCreate = async () => {
+    if (!newTitle.trim()) return;
+    setCreating(true);
+    try {
+      await api.createTask(
+        newTitle.trim(),
+        newDescription.trim(),
+        newPriority,
+        newMinutes,
+        newDeadline ? new Date(newDeadline).toISOString() : null,
+      );
+      setShowCreate(false);
+      setNewTitle("");
+      setNewDescription("");
+      setNewPriority(3);
+      setNewMinutes(30);
+      setNewDeadline("");
+      onTasksChange();
+    } catch {
+      alert("Failed to create task");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!confirm("Delete this task?")) return;
+    setDeletingId(taskId);
+    try {
+      await api.deleteTask(taskId);
+      onTasksChange();
+    } catch {
+      alert("Failed to delete task");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleToggleComplete = async (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "done" ? "todo" : "done";
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "done") updates.progress = 1.0;
+    try {
+      await api.updateTask(taskId, updates);
+      onTasksChange();
+    } catch {
+      alert("Failed to update task");
+    }
+  };
 
   const priorityColors: Record<string, string> = {
     rose:   "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
@@ -704,13 +784,76 @@ function TasksScreen({ tasks: backendTasks }: { tasks: BackendTask[] }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2>Tasks</h2>
-        <Btn variant="primary"><Plus size={14} /> New Task</Btn>
+        <Btn variant="primary" onClick={() => setShowCreate(true)}><Plus size={14} /> New Task</Btn>
       </div>
+
+      {/* Create Task Dialog */}
+      {showCreate && (
+        <Card className="border-primary/30">
+          <h3 className="mb-3">Create New Task</h3>
+          <div className="space-y-3">
+            <input
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="Task title"
+              className="w-full bg-input-background rounded-lg px-3 py-2 text-sm outline-none border border-border focus:border-primary/50"
+            />
+            <textarea
+              value={newDescription}
+              onChange={e => setNewDescription(e.target.value)}
+              placeholder="Description (optional)"
+              rows={2}
+              className="w-full bg-input-background rounded-lg px-3 py-2 text-sm outline-none border border-border focus:border-primary/50 resize-none"
+            />
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Priority</label>
+                <select
+                  value={newPriority}
+                  onChange={e => setNewPriority(Number(e.target.value))}
+                  className="w-full bg-input-background rounded-lg px-3 py-2 text-sm border border-border"
+                >
+                  <option value={1}>1 - Lowest</option>
+                  <option value={2}>2 - Low</option>
+                  <option value={3}>3 - Medium</option>
+                  <option value={4}>4 - High</option>
+                  <option value={5}>5 - Critical</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Est. Minutes</label>
+                <input
+                  type="number"
+                  value={newMinutes}
+                  onChange={e => setNewMinutes(Number(e.target.value))}
+                  min={5}
+                  className="w-full bg-input-background rounded-lg px-3 py-2 text-sm border border-border"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Deadline</label>
+                <input
+                  type="datetime-local"
+                  value={newDeadline}
+                  onChange={e => setNewDeadline(e.target.value)}
+                  className="w-full bg-input-background rounded-lg px-3 py-2 text-sm border border-border"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Btn>
+              <Btn variant="primary" onClick={handleCreate} disabled={creating || !newTitle.trim()}>
+                {creating ? "Creating..." : "Create Task"}
+              </Btn>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Filter bar */}
       <div className="flex gap-2 flex-wrap">
-        {["All", "Today", "High Risk", "In Progress", "Blocked"].map((f, i) => (
-          <button key={f} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${i === 0 ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"}`}>
+        {["All", "Today", "High Risk", "In Progress", "Done"].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${filter === f ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"}`}>
             {f}
           </button>
         ))}
@@ -777,8 +920,26 @@ function TasksScreen({ tasks: backendTasks }: { tasks: BackendTask[] }) {
                       </div>
                     )}
                     <div className="flex gap-2 flex-wrap">
-                      <Btn variant="primary" className="text-xs"><Focus size={12} /> Start Focus</Btn>
-                      <Btn variant="secondary" className="text-xs"><Brain size={12} /> AI Assist</Btn>
+                      {taskIds[i] && (
+                        <>
+                          <Btn
+                            variant={filteredBackend[i]?.status === "done" ? "secondary" : "primary"}
+                            className="text-xs"
+                            onClick={() => handleToggleComplete(taskIds[i], filteredBackend[i]?.status || "todo")}
+                          >
+                            <Check size={12} /> {filteredBackend[i]?.status === "done" ? "Reopen" : "Complete"}
+                          </Btn>
+                          <Btn
+                            variant="danger"
+                            className="text-xs"
+                            onClick={() => handleDelete(taskIds[i])}
+                            disabled={deletingId === taskIds[i]}
+                          >
+                            <X size={12} /> {deletingId === taskIds[i] ? "Deleting..." : "Delete"}
+                          </Btn>
+                        </>
+                      )}
+                      <Btn variant="secondary" className="text-xs"><Focus size={12} /> Start Focus</Btn>
                     </div>
                   </div>
                 </div>
@@ -793,8 +954,36 @@ function TasksScreen({ tasks: backendTasks }: { tasks: BackendTask[] }) {
 
 // ── Screen: Deadline Center ───────────────────────────────────────────────
 
-function DeadlineCenterScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const deadlines = [
+function DeadlineCenterScreen({ onNavigate, tasks: backendTasks }: { onNavigate: (s: Screen) => void; tasks: BackendTask[] }) {
+  const openTasks = backendTasks.filter(t => t.status !== "done" && t.deadline_at);
+  const useBackendData = openTasks.length > 0;
+
+  const backendDeadlines = openTasks.map(t => {
+    const deadlineDate = new Date(t.deadline_at!);
+    const now = new Date();
+    const msRemaining = deadlineDate.getTime() - now.getTime();
+    const hoursRemaining = Math.max(0, msRemaining / (1000 * 60 * 60));
+    const timeLeft = hoursRemaining >= 24
+      ? `${Math.round(hoursRemaining / 24)}d ${Math.round(hoursRemaining % 24)}h`
+      : `${Math.round(hoursRemaining)}h ${Math.round((hoursRemaining % 1) * 60)}m`;
+    const prob = toPercent(t.completion_probability);
+    const risk = toPercent(t.risk_score);
+    const color = risk >= 70 ? "rose" : risk >= 40 ? "orange" : risk >= 20 ? "amber" : "green";
+    return {
+      title: t.title,
+      due: formatDeadline(t.deadline_at),
+      timeLeft,
+      prob,
+      color,
+      actions: [
+        "Break into micro-tasks",
+        "Start Focus Mode",
+        ...(prob < 50 ? ["Draft extension email"] : []),
+      ],
+    };
+  });
+
+  const hardcodedDeadlines = [
     {
       title: "Research Paper: AI in Healthcare",
       due: "Today, 11:59 PM",
@@ -829,6 +1018,9 @@ function DeadlineCenterScreen({ onNavigate }: { onNavigate: (s: Screen) => void 
     },
   ];
 
+  const deadlines = useBackendData ? backendDeadlines : hardcodedDeadlines;
+  const criticalCount = deadlines.filter(d => d.color === "rose" || d.color === "orange").length;
+
   const colorMap: Record<string, { badge: string; bar: string; ring: string }> = {
     rose:   { badge: "rose",   bar: "bg-rose-400",    ring: "border-rose-300 dark:border-rose-800"   },
     orange: { badge: "orange", bar: "bg-orange-400",  ring: "border-orange-300 dark:border-orange-800" },
@@ -840,7 +1032,7 @@ function DeadlineCenterScreen({ onNavigate }: { onNavigate: (s: Screen) => void 
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2>Deadline Center</h2>
-        <Badge variant="rose">2 Critical</Badge>
+        <Badge variant="rose">{criticalCount} Critical</Badge>
       </div>
 
       <div className="space-y-4">
@@ -895,7 +1087,7 @@ function DeadlineCenterScreen({ onNavigate }: { onNavigate: (s: Screen) => void 
 
 // ── Screen: Panic Mode ────────────────────────────────────────────────────
 
-function PanicModeScreen({ onNavigate, userId }: { onNavigate: (s: Screen) => void; userId: string | null }) {
+function PanicModeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const [active, setActive] = useState(false);
   const [checklist, setChecklist] = useState([
     { text: "Pause all non-essential notifications", done: false },
@@ -910,10 +1102,10 @@ function PanicModeScreen({ onNavigate, userId }: { onNavigate: (s: Screen) => vo
   const activatePanic = async () => {
     const nextActive = !active;
     setActive(nextActive);
-    if (!nextActive || !userId) return;
+    if (!nextActive) return;
 
     try {
-      const response = await api.panic(userId, "Current highest-risk task");
+      const response = await api.panic("Current highest-risk task");
       if (response.recommendations.length) {
         setChecklist(response.recommendations.map(text => ({ text, done: false })));
       }
@@ -1016,7 +1208,7 @@ function PanicModeScreen({ onNavigate, userId }: { onNavigate: (s: Screen) => vo
 
 // ── Screen: Focus Mode ────────────────────────────────────────────────────
 
-function FocusModeScreen({ userId }: { userId: string | null }) {
+function FocusModeScreen() {
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState(5400); // 90 min
   const [backendNote, setBackendNote] = useState("");
@@ -1035,10 +1227,10 @@ function FocusModeScreen({ userId }: { userId: string | null }) {
   const toggleFocus = async () => {
     const nextRunning = !running;
     setRunning(nextRunning);
-    if (!nextRunning || !userId) return;
+    if (!nextRunning) return;
 
     try {
-      const response = await api.focus(userId, "Research Paper: AI in Healthcare", 90);
+      const response = await api.focus("Research Paper: AI in Healthcare", 90);
       setBackendNote(response.message);
     } catch {
       setBackendNote("Focus timer is running locally. Backend Focus Mode call failed.");
@@ -1339,7 +1531,7 @@ function AnalyticsScreen() {
 
 function hasStoredSession() {
   if (typeof window === "undefined") return false;
-  return Boolean(localStorage.getItem("access_token"));
+  return Boolean(localStorage.getItem("jwt_token"));
 }
 
 export default function App() {
@@ -1350,13 +1542,39 @@ export default function App() {
   const [dashboard, setDashboard] = useState<BackendDashboard | null>(null);
   const [tasks, setTasks] = useState<BackendTask[]>([]);
   const [backendStatus, setBackendStatus] = useState<"connecting" | "connected" | "offline">("connecting");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const loadBackendData = useCallback(async (activeUser: BackendUser) => {
+  // Close dropdowns when clicking outside
+  const notifRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotifications(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("jwt_token");
+    localStorage.removeItem("auth_session");
+    localStorage.removeItem("email");
+    localStorage.removeItem("name");
+    localStorage.removeItem("user_id");
+    setUser(null);
+    setDashboard(null);
+    setTasks([]);
+    setScreen("login");
+  };
+
+  const loadBackendData = useCallback(async () => {
     setBackendStatus("connecting");
     try {
       const [dashboardData, taskData] = await Promise.all([
-        api.getDashboard(activeUser.id),
-        api.getTasks(activeUser.id),
+        api.getDashboard(),
+        api.getTasks(),
       ]);
       setDashboard(dashboardData);
       setTasks(taskData);
@@ -1367,10 +1585,11 @@ export default function App() {
   }, []);
 
   const login = async () => {
-    const response = await fetch('/api/auth/google/url');
-    const data = await response.json();
-    if (data?.url) {
-      window.location.href = data.url;
+    try {
+      const data = await api.getGoogleAuthUrl();
+      if (data?.url) window.location.href = data.url;
+    } catch {
+      alert("Could not connect to the backend. Make sure the API server is running.");
     }
   };
 
@@ -1381,8 +1600,15 @@ export default function App() {
   useEffect(() => {
     if (hasStoredSession()) {
       setScreen("dashboard");
+      api.getMe().then(u => {
+        setUser(u);
+        loadBackendData();
+      }).catch(() => {
+        localStorage.removeItem("jwt_token");
+        setScreen("login");
+      });
     }
-  }, []);
+  }, [loadBackendData]);
 
   if (screen === "login") {
     return (
@@ -1453,12 +1679,7 @@ export default function App() {
               {sidebarOpen && <span>{dark ? "Light Mode" : "Dark Mode"}</span>}
             </button>
             <button
-              onClick={() => {
-                setUser(null);
-                setDashboard(null);
-                setTasks([]);
-                setScreen("login");
-              }}
+              onClick={handleLogout}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors cursor-pointer ${sidebarOpen ? "w-full" : ""}`}
             >
               <LogOut size={15} className="flex-shrink-0" />
@@ -1485,25 +1706,71 @@ export default function App() {
               {/* Panic indicator */}
               {isPanic && <Badge variant="rose">Emergency Active</Badge>}
               {isFocus && <Badge variant="purple">Focus Session</Badge>}
-              <button className="relative w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors cursor-pointer text-muted-foreground">
-                <Bell size={15} />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />
-              </button>
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                AJ
+
+              {/* Notifications dropdown */}
+              <div ref={notifRef} className="relative">
+                <button
+                  onClick={() => { setShowNotifications(n => !n); setShowUserMenu(false); }}
+                  className="relative w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+                >
+                  <Bell size={15} />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />
+                </button>
+                {showNotifications && (
+                  <div className="absolute right-0 top-full mt-1 w-72 bg-card border border-border rounded-xl shadow-lg z-50 p-2">
+                    <p className="text-xs font-medium text-muted-foreground px-2 py-1 uppercase tracking-wider">Notifications</p>
+                    {[
+                      { text: "Risk score increased — check your deadlines", time: "2m ago", dot: "bg-rose-500" },
+                      { text: "Deadline approaching for your top task", time: "15m ago", dot: "bg-amber-400" },
+                      { text: "AI recommendation available", time: "1h ago", dot: "bg-blue-400" },
+                    ].map((n, i) => (
+                      <div key={i} className="flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+                        <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.dot}`} />
+                        <div>
+                          <p className="text-xs text-foreground leading-relaxed">{n.text}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{n.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* User menu dropdown */}
+              <div ref={userMenuRef} className="relative">
+                <button
+                  onClick={() => { setShowUserMenu(m => !m); setShowNotifications(false); }}
+                  className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all"
+                >
+                  {user?.name ? user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "?"}
+                </button>
+                {showUserMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-xl shadow-lg z-50 p-2">
+                    <div className="px-2 py-2 border-b border-border mb-1">
+                      <p className="text-sm font-medium">{user?.name || "User"}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
+                    </div>
+                    <button
+                      onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                      className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <LogOut size={14} /> Sign out
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </header>
 
           {/* Screen content */}
           <main className="flex-1 overflow-y-auto p-5">
-            {screen === "dashboard"  && <DashboardScreen onNavigate={setScreen} dashboard={dashboard} tasks={tasks} backendStatus={backendStatus} />}
-            {screen === "ai-command" && <AICommandScreen userId={user?.id ?? null} />}
+            {screen === "dashboard"  && <DashboardScreen onNavigate={setScreen} dashboard={dashboard} tasks={tasks} backendStatus={backendStatus} user={user} />}
+            {screen === "ai-command" && <AICommandScreen />}
             {screen === "calendar"   && <CalendarScreen />}
-            {screen === "tasks"      && <TasksScreen tasks={tasks} />}
-            {screen === "deadlines"  && <DeadlineCenterScreen onNavigate={setScreen} />}
-            {screen === "panic"      && <PanicModeScreen onNavigate={setScreen} userId={user?.id ?? null} />}
-            {screen === "focus"      && <FocusModeScreen userId={user?.id ?? null} />}
+            {screen === "tasks"      && <TasksScreen tasks={tasks} onTasksChange={loadBackendData} />}
+            {screen === "deadlines"  && <DeadlineCenterScreen onNavigate={setScreen} tasks={tasks} />}
+            {screen === "panic"      && <PanicModeScreen onNavigate={setScreen} />}
+            {screen === "focus"      && <FocusModeScreen />}
             {screen === "workspace"  && <WorkspaceScreen />}
             {screen === "analytics"  && <AnalyticsScreen />}
           </main>
