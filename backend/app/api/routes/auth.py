@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.config import settings
 from app.database.session import get_db
 from app.models.user import User
@@ -76,3 +77,24 @@ async def google_callback(code: str, state: str, db: AsyncSession = Depends(get_
 
     except httpx.HTTPError as e:
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {str(e)}")
+
+
+@router.post("/logout")
+async def logout(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.access_token:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": user.access_token},
+                )
+        except Exception:
+            pass
+
+    user.access_token = None
+    user.refresh_token = None
+    await db.commit()
+    return {"status": "logged_out"}

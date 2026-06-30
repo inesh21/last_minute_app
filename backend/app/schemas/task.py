@@ -33,6 +33,7 @@ class TaskRead(TaskBase):
     progress: float
     risk_score: float
     completion_probability: float
+    google_task_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

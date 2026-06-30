@@ -20,6 +20,7 @@ export type BackendTask = {
   progress: number;
   risk_score: number;
   completion_probability: number;
+  google_task_id: string | null;
   deadline_at: string | null;
   created_at: string;
   updated_at: string;
@@ -54,6 +55,24 @@ export type CalendarEvent = {
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   htmlLink?: string;
+};
+
+export type GmailMessage = {
+  id: string;
+  threadId?: string;
+  snippet?: string;
+  subject?: string;
+  from?: string;
+  date?: string;
+  labelIds?: string[];
+};
+
+export type WorkspaceItem = {
+  type: 'doc' | 'slides' | 'draft';
+  title: string;
+  url: string;
+  id: string;
+  createdAt: string;
 };
 
 function getAuthHeaders(): Record<string, string> {
@@ -153,6 +172,38 @@ export const api = {
       `/api/calendar/events?${query({ days })}`,
     ),
 
+  createCalendarEvent: (title: string, start: string, end: string, description = '', timezone = 'UTC') =>
+    request<{ event: CalendarEvent }>('/api/calendar/events', {
+      method: 'POST',
+      body: JSON.stringify({ title, start, end, description, timezone }),
+    }),
+
+  updateCalendarEvent: (eventId: string, updates: { title?: string; description?: string; start?: string; end?: string; timezone?: string }) =>
+    request<{ event: CalendarEvent }>(`/api/calendar/events/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+
+  deleteCalendarEvent: (eventId: string) =>
+    request<{ status: string; event_id: string }>(`/api/calendar/events/${eventId}`, {
+      method: 'DELETE',
+    }),
+
+  syncCalendarEvents: (days = 14) =>
+    request<{ synced: number; events: CalendarEvent[] }>(`/api/calendar/sync?${query({ days })}`, {
+      method: 'POST',
+    }),
+
+  syncTasks: () =>
+    request<{ synced: number; total: number }>('/api/tasks/sync', {
+      method: 'POST',
+    }),
+
+  logout: () =>
+    request<{ status: string }>('/api/auth/logout', {
+      method: 'POST',
+    }),
+
   screenerRun: (gmailQuery = 'newer_than:7d') =>
     request<BackendAgentResponse>('/api/ai/screener/run', {
       method: 'POST',
@@ -161,4 +212,27 @@ export const api = {
 
   getGoogleAuthUrl: () =>
     request<{ url: string; state: string }>('/api/auth/google/url'),
+
+  getGmailMessages: (q = '', maxResults = 15) =>
+    request<{ messages: GmailMessage[]; count: number }>(
+      `/api/workspace/gmail/messages?${query({ query: q, max_results: maxResults })}`,
+    ),
+
+  createGmailDraft: (to: string, subject: string, body: string) =>
+    request<{ draft_id: string; message_id: string; url: string }>('/api/workspace/gmail/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ to, subject, body }),
+    }),
+
+  createGoogleDoc: (title: string) =>
+    request<{ document_id: string; title: string; url: string }>('/api/workspace/docs/create', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+
+  createGoogleSlides: (title: string) =>
+    request<{ presentation_id: string; title: string; url: string }>('/api/workspace/slides/create', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
 };

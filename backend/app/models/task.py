@@ -23,6 +23,7 @@ class Task(Base):
     completion_probability: Mapped[float] = mapped_column(Float, default=1.0)
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    google_task_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="tasks")

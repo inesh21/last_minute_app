@@ -1,7 +1,8 @@
 import { useState } from "react";
 import {
   Zap, Check, CheckSquare, BellOff, RefreshCw, X,
-  Timer, FileText, FolderOpen, Eye, Send, Mail,
+  Timer, FileText, FolderOpen, Loader2,
+  Mail, Eye, Send, ExternalLink,
 } from "lucide-react";
 import { Card, Btn, ProgressBar } from "../components/shared";
 import { api } from "../services/api";
@@ -17,7 +18,19 @@ export function PanicModePage() {
     { text: "AI drafting paper outline (4 sections)", done: false },
   ]);
 
+  const [draftPreview, setDraftPreview] = useState(false);
+  const [draftSending, setDraftSending] = useState(false);
+  const [draftUrl, setDraftUrl] = useState("");
+  const [draftError, setDraftError] = useState("");
+
+  const [docCreating, setDocCreating] = useState(false);
+  const [docUrl, setDocUrl] = useState("");
+  const [docError, setDocError] = useState("");
+
+  const [actionBusy, setActionBusy] = useState<number | null>(null);
+
   const toggle = (i: number) => setChecklist(c => c.map((item, j) => j === i ? { ...item, done: !item.done } : item));
+
   const activatePanic = async () => {
     const nextActive = !active;
     setActive(nextActive);
@@ -31,9 +44,56 @@ export function PanicModePage() {
     } catch {
       setChecklist(c => [
         ...c,
-        { text: "Backend Panic Mode call failed - continue with local checklist", done: false },
+        { text: "Backend Panic Mode call failed — continue with local checklist", done: false },
       ]);
     }
+  };
+
+  const sendToDrafts = async () => {
+    setDraftSending(true);
+    setDraftError("");
+    try {
+      const result = await api.createGmailDraft(
+        "professor@university.edu",
+        "Request for Extension — Assignment Deadline",
+        "Dear Professor,\n\nI hope this email finds you well. I am writing to respectfully request a 72-hour extension on the upcoming assignment deadline. Due to unforeseen academic workload and personal circumstances, I need additional time to ensure the quality of my submission.\n\nI am committed to delivering excellent work and would greatly appreciate your consideration.\n\nThank you for your understanding.\n\nBest regards"
+      );
+      setDraftUrl(result.url);
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : "Failed to create draft");
+    } finally {
+      setDraftSending(false);
+    }
+  };
+
+  const generateFirstDraft = async () => {
+    setDocCreating(true);
+    setDocError("");
+    try {
+      const result = await api.createGoogleDoc("Emergency Draft — Paper Outline");
+      setDocUrl(result.url);
+    } catch (e) {
+      setDocError(e instanceof Error ? e.message : "Failed to create document");
+    } finally {
+      setDocCreating(false);
+    }
+  };
+
+  const emergencyActions = [
+    { icon: BellOff,    label: "Pause Notifications",  desc: "All alerts silenced",     action: async () => { /* UI-only */ } },
+    { icon: RefreshCw,  label: "Reorder Schedule",     desc: "AI reoptimizes your day",  action: async () => { await api.chat("Reorder my schedule to prioritize the most urgent task"); } },
+    { icon: X,          label: "Cancel Low-Priority",  desc: "3 tasks will be moved",    action: async () => { /* UI-only */ } },
+    { icon: Timer,      label: "Start 90min Timer",    desc: "Pomodoro focus session",   action: async () => { await api.focus("Emergency task", 90); } },
+    { icon: FileText,   label: "Generate First Draft", desc: "AI writes paper skeleton", action: generateFirstDraft },
+    { icon: FolderOpen, label: "Open Required Files",  desc: "Paper, notes, rubric",     action: async () => { /* UI-only */ } },
+  ];
+
+  const handleAction = async (i: number) => {
+    setActionBusy(i);
+    try {
+      await emergencyActions[i].action();
+    } catch { /* silently handle */ }
+    setActionBusy(null);
   };
 
   return (
@@ -66,21 +126,35 @@ export function PanicModePage() {
         <div className="lg:col-span-2 space-y-3">
           <h3>Emergency Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: BellOff,   label: "Pause Notifications",   desc: "All alerts silenced"        },
-              { icon: RefreshCw, label: "Reorder Schedule",      desc: "AI reoptimizes your day"    },
-              { icon: X,         label: "Cancel Low-Priority",   desc: "3 tasks will be moved"      },
-              { icon: Timer,     label: "Start 90min Timer",     desc: "Pomodoro focus session"     },
-              { icon: FileText,  label: "Generate First Draft",  desc: "AI writes paper skeleton"   },
-              { icon: FolderOpen,label: "Open Required Files",   desc: "Paper, notes, rubric"       },
-            ].map((a, i) => (
-              <button key={i} className={`p-3 rounded-xl border text-left transition-all cursor-pointer hover:border-primary/40 ${active ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900" : "bg-card border-border hover:bg-muted/50"}`}>
-                <a.icon size={18} className={active ? "text-rose-500 mb-2" : "text-primary mb-2"} />
+            {emergencyActions.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => handleAction(i)}
+                disabled={actionBusy === i}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer hover:border-primary/40 disabled:opacity-60 ${active ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900" : "bg-card border-border hover:bg-muted/50"}`}
+              >
+                {actionBusy === i
+                  ? <Loader2 size={18} className="animate-spin text-primary mb-2" />
+                  : <a.icon size={18} className={active ? "text-rose-500 mb-2" : "text-primary mb-2"} />
+                }
                 <p className="text-sm font-medium">{a.label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{a.desc}</p>
               </button>
             ))}
           </div>
+
+          {docUrl && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-sm">
+              <FileText size={14} className="text-emerald-500" />
+              <span>Document created!</span>
+              <a href={docUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline ml-auto">
+                Open <ExternalLink size={12} />
+              </a>
+            </div>
+          )}
+          {docError && (
+            <p className="text-sm text-destructive">{docError}</p>
+          )}
         </div>
 
         <Card>
@@ -114,9 +188,41 @@ export function PanicModePage() {
           <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Ghostwriter Ready</span>
         </div>
         <p className="text-xs text-muted-foreground">AI has drafted an extension request email for Professor Martinez. The email cites academic pressure and requests a 72-hour extension.</p>
+
+        {draftPreview && (
+          <div className="mt-3 p-3 bg-muted/50 rounded-lg text-xs whitespace-pre-line text-muted-foreground">
+            <p className="font-medium text-foreground mb-1">To: professor@university.edu</p>
+            <p className="font-medium text-foreground mb-2">Subject: Request for Extension — Assignment Deadline</p>
+            Dear Professor,{"\n\n"}
+            I hope this email finds you well. I am writing to respectfully request a 72-hour extension on the upcoming assignment deadline. Due to unforeseen academic workload and personal circumstances, I need additional time to ensure the quality of my submission.{"\n\n"}
+            I am committed to delivering excellent work and would greatly appreciate your consideration.{"\n\n"}
+            Thank you for your understanding.{"\n\n"}
+            Best regards
+          </div>
+        )}
+
+        {draftUrl && (
+          <div className="mt-3 flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-sm">
+            <Check size={14} className="text-emerald-500" />
+            <span>Draft saved to Gmail!</span>
+            <a href={draftUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline ml-auto">
+              Open in Gmail <ExternalLink size={12} />
+            </a>
+          </div>
+        )}
+
+        {draftError && (
+          <p className="mt-2 text-sm text-destructive">{draftError}</p>
+        )}
+
         <div className="flex gap-2 mt-3">
-          <Btn variant="secondary" className="text-xs"><Eye size={12} /> Preview Email</Btn>
-          <Btn variant="primary" className="text-xs"><Send size={12} /> Send to Drafts</Btn>
+          <Btn variant="secondary" className="text-xs" onClick={() => setDraftPreview(!draftPreview)}>
+            <Eye size={12} /> {draftPreview ? "Hide Preview" : "Preview Email"}
+          </Btn>
+          <Btn variant="primary" className="text-xs" onClick={sendToDrafts} disabled={draftSending || !!draftUrl}>
+            {draftSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+            {draftUrl ? "Sent to Drafts" : "Send to Drafts"}
+          </Btn>
         </div>
       </Card>
     </div>

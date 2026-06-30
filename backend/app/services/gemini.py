@@ -93,6 +93,30 @@ TOOL_DECLARATIONS = [
             "required": ["title"],
         },
     },
+    {
+        "name": "list_google_tasks",
+        "description": "List the user's Google Tasks to see what to-dos they currently have.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "update_calendar",
+        "description": "Update an existing Google Calendar event by its event ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "The Google Calendar event ID to update."},
+                "title": {"type": "string", "description": "New event title."},
+                "start": {"type": "string", "description": "New start time in ISO 8601 format."},
+                "end": {"type": "string", "description": "New end time in ISO 8601 format."},
+                "description": {"type": "string", "description": "New event description."},
+            },
+            "required": ["event_id"],
+        },
+    },
 ]
 
 SYSTEM_INSTRUCTION = """You are the AI Chief of Staff for "Last Minute Lifesaver", an autonomous productivity companion.

@@ -42,7 +42,7 @@ class CalendarTool:
                     "end": {"dateTime": kwargs["end"], "timeZone": kwargs.get("timezone", "UTC")},
                 }
                 event = await google_api.calendar_create_event(access_token, event_body)
-                return {"ok": True, "event_id": event["id"], "link": event.get("htmlLink", "")}
+                return {"ok": True, "event_id": event["id"], "title": kwargs.get("title", "Event"), "url": event.get("htmlLink", "")}
 
             if self.name == "update_calendar":
                 event_id = kwargs.get("event_id")

@@ -72,6 +72,15 @@ async def calendar_update_event(access_token: str, event_id: str, event_body: di
         return resp.json()
 
 
+async def calendar_delete_event(access_token: str, event_id: str) -> None:
+    async with httpx.AsyncClient() as client:
+        resp = await client.delete(
+            f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}",
+            headers=_headers(access_token),
+        )
+        resp.raise_for_status()
+
+
 # ── Gmail ──────────────────────────────────────────────────────────────────
 
 async def gmail_list_messages(
@@ -185,6 +194,48 @@ async def tasks_create(
         )
         resp.raise_for_status()
         return resp.json()
+
+
+async def tasks_update(
+    access_token: str,
+    task_id: str,
+    title: str | None = None,
+    notes: str | None = None,
+    due: str | None = None,
+    status: str | None = None,
+    tasklist: str = "@default",
+) -> dict:
+    body: dict = {}
+    if title is not None:
+        body["title"] = title
+    if notes is not None:
+        body["notes"] = notes
+    if due is not None:
+        body["due"] = due
+    if status is not None:
+        body["status"] = status
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            f"https://tasks.googleapis.com/tasks/v1/lists/{tasklist}/tasks/{task_id}",
+            headers={**_headers(access_token), "Content-Type": "application/json"},
+            json=body,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def tasks_delete(
+    access_token: str,
+    task_id: str,
+    tasklist: str = "@default",
+) -> None:
+    async with httpx.AsyncClient() as client:
+        resp = await client.delete(
+            f"https://tasks.googleapis.com/tasks/v1/lists/{tasklist}/tasks/{task_id}",
+            headers=_headers(access_token),
+        )
+        resp.raise_for_status()
 
 
 # ── Google Docs ────────────────────────────────────────────────────────────

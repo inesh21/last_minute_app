@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Clock, Timer, ChevronDown, Check, X, Focus, Plus,
+  Clock, Timer, ChevronDown, Check, X, Focus, Plus, RefreshCw,
 } from "lucide-react";
 import type { BackendTask } from "../services/api";
 import { api } from "../services/api";
@@ -19,6 +19,7 @@ export function TasksPage({ tasks: backendTasks, onTasksChange }: { tasks: Backe
   const [newDescription, setNewDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const filteredBackend = backendTasks.filter(t => {
     if (filter === "All") return true;
@@ -101,6 +102,18 @@ export function TasksPage({ tasks: backendTasks, onTasksChange }: { tasks: Backe
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await api.syncTasks();
+      onTasksChange();
+    } catch {
+      alert("Failed to sync with Google Tasks");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const priorityColors: Record<string, string> = {
     rose:   "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
     orange: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
@@ -112,7 +125,12 @@ export function TasksPage({ tasks: backendTasks, onTasksChange }: { tasks: Backe
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2>Tasks</h2>
-        <Btn variant="primary" onClick={() => setShowCreate(true)}><Plus size={14} /> New Task</Btn>
+        <div className="flex items-center gap-2">
+          <Btn variant="secondary" onClick={handleSync} disabled={syncing}>
+            <RefreshCw size={13} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing..." : "Sync Google Tasks"}
+          </Btn>
+          <Btn variant="primary" onClick={() => setShowCreate(true)}><Plus size={14} /> New Task</Btn>
+        </div>
       </div>
 
       {showCreate && (

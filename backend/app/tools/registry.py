@@ -15,6 +15,7 @@ class ToolRegistry:
             "create_calendar_event": CalendarTool("create_calendar_event"),
             "update_calendar": CalendarTool("update_calendar"),
             "create_google_task": TasksTool("create_google_task"),
+            "list_google_tasks": TasksTool("list_google_tasks"),
             "create_google_doc": DocsTool("create_google_doc"),
             "create_google_slides": SlidesTool("create_google_slides"),
             "get_maps_traffic": MapsTool("get_maps_traffic"),

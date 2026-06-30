@@ -64,7 +64,12 @@ export function AuthenticatedLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Continue with local logout even if server call fails
+    }
     localStorage.removeItem("jwt_token");
     localStorage.removeItem("auth_session");
     localStorage.removeItem("email");
