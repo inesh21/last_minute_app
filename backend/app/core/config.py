@@ -5,10 +5,13 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-DEFAULT_SQLITE_PATH = Path("C:/tmp/last-minute-lifesaver.db")
-DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
+# 1. Fixed BACKEND_ROOT to resolve dynamically and safely across platforms
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+# 2. Cross-platform local fallback path (works on Windows, Linux, Mac)
+DEFAULT_SQLITE_PATH = BACKEND_ROOT / "backend" / "last-minute-lifesaver.db"
+DEFAULT_SQLITE_URL = f"sqlite+aiosqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
+
 DEFAULT_DEV_JWT_SECRET = "dev-only-9db70016a7c84e2ba2e26af02137116d8c1f1f0fb6c34d28"
 
 
@@ -63,6 +66,8 @@ class Settings(BaseSettings):
 
     def __init__(self, **values):
         super().__init__(**values)
+        
+        # 3. Read extra values from local file overrides if present
         env_values = _read_env_file()
         for key, value in env_values.items():
             if not value:
@@ -77,6 +82,17 @@ class Settings(BaseSettings):
                 self.frontend_url = value
             elif key == "GOOGLE_REDIRECT_URI" and not self.google_redirect_uri:
                 self.google_redirect_uri = value
+            elif key == "DATABASE_URL" and self.database_url == DEFAULT_SQLITE_URL:
+                self.database_url = value
+
+        # 4. Check if Vercel Postgres is provisioned and override
+        vercel_postgres = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
+        if vercel_postgres and not vercel_postgres.startswith("sqlite"):
+            # Swaps out standard postgres:// with async driver prefix expected by SQLAlchemy
+            if vercel_postgres.startswith("postgres://"):
+                vercel_postgres = vercel_postgres.replace("postgres://", "postgresql+asyncpg://", 1)
+            self.database_url = vercel_postgres
+            self.app_env = "production"
 
     @property
     def google_oauth_configured(self) -> bool:
